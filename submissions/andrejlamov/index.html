@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+        <meta name="description" content="Cycle.js solution for the Flux challenge"/>
+        <title>Cycle.js solution for the Flux challenge</title>
+        <link rel="stylesheet" href="../../styles.css" type="text/css">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.6/d3.min.js" charset="utf-8"></script>
+    </head>
+    <body>
+        <div class="app-container">
+            <div class="css-root">
+                <h1 class="css-planet-monitor">Loading</h1>
+
+                <section class="css-scrollable-list">
+                    <ul class="css-slots">
+
+                    </ul>
+                    <div class="css-scroll-buttons">
+                        <button class="css-button-up"></button>
+                        <button class="css-button-down"></button>
+                    </div>
+                </section>
+            </div>
+        </div>
+        <script>
+
+         var homeworld = null;
+         var current_request = null;
+
+         var update = function(data) {
+
+             var list = d3.select('ul.css-slots')
+                          .selectAll('li.css-slot')
+                          .data(data, function(d, i) {
+                              return d.id + i;
+                          });
+
+             var enter = list.enter();
+
+             var item = enter.append('li')
+                             .attr('class', 'css-slot');
+
+             item.append('h3')
+                 .text(function(d) {
+                     return d.name;
+                 });
+
+             item.append('h6').text(function(d) {
+                 return 'Homeworld: ' + d.homeworld.name;
+             });
+
+             list.exit().remove();
+
+             if(homeworld != null) {
+                 highlight(homeworld);
+             };
+         };
+
+         var fetch = function(url, type, acc) {
+             current_request = d3.json(url, function(error, d) {
+
+                 if(type == 'master') {
+                     acc = d3.merge([[d], acc]);
+                 } else if (type == 'apprentice'){
+                     acc.push(d);
+                 }
+
+                 update(acc);
+
+                 var next_url = d[type].url;
+
+                 if(acc.length != 5 && next_url) {
+                     fetch(next_url, type, acc);
+                 };
+             });
+         };
+
+         var button_up = function() {
+             current_request.abort();
+             if(d3.select("div.css-scroll-buttons")
+                  .classed('css-button-disabled')) {
+                      return;
+             }
+
+             var data = d3.selectAll('li.css-slot').data();
+
+             if(data.length == 5) {
+                   data.pop();
+                   data.pop();
+             };
+
+             if(data.length != 0) {
+                 var url = data[0].master.url;
+                 if(url) {
+                     fetch(url, 'master', data);
+                 }
+             } else {
+                 update(data);
+             }
+         };
+
+         var button_down = function() {
+             curren_request.abort();
+
+             if(d3.select("div.css-scroll-buttons")
+                  .classed('css-button-disabled')) {
+                      return;
+             }
+
+             var data = d3.selectAll('li.css-slot').data();
+             if(data.length == 5) {
+                 data.splice(0,2);
+             }
+             var url = data[data.length-1].apprentice.url;
+             update(data);
+             if(url) {
+                 fetch(url, 'apprentice', data);
+             }
+         };
+
+         var highlight = function(homeworld) {
+             var item = d3.selectAll('li.css-slot')
+                          .classed('highlight', false)
+                          .filter(function(d) {
+                              return d.homeworld.id == homeworld.id;
+                          });
+
+             var buttons = d3.select("div.css-scroll-buttons");
+             if(!item.empty()) {
+                 item.classed('highlight', true);
+                 buttons.classed('css-button-disabled', true);
+             } else {
+                 buttons.classed('css-button-disabled', false);
+             }
+         };
+
+         d3.select('button.css-button-up')
+           .on('click', button_up);
+
+         d3.select('button.css-button-down')
+           .on('click', button_down);
+
+         var socket = new WebSocket("ws://localhost:4000");
+         socket.onmessage = function(e) {
+             var homeworld = JSON.parse(e.data);
+             var text = "Obi-Wan currently on " + homeworld.name;
+
+             d3.select('.css-planet-monitor')
+               .text(text);
+
+             highlight(homeworld);
+         };
+
+         fetch('http://localhost:3000/dark-jedis/3616', 'apprentice', []);
+
+        </script>
+    </body>
+</html>
